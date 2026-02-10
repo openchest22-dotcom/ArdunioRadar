@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Arduino Temassız Piyano</h1>
+    <button onclick="baglan()">1. Arduino'ya Bağlan</button>
+    <p id="durum">Durum: Bağlı değil. Lütfen butona bas ve Arduino'yu seç.</p>
+    <h2 id="mesafe">Mesafe: 0 cm</h2>
+
+    <script>
+        let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let oscillator = null;
+
+        async function baglan() {
+            try {
+                const port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 });
+                document.getElementById("durum").innerText = "Durum: Bağlandı! Elini sensöre yaklaştır.";
+                
+                const reader = port.readable.getReader();
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    const text = new TextDecoder().decode(value);
+                    const dist = parseInt(text.trim());
+                    
+                    if (!isNaN(dist)) {
+                        document.getElementById("mesafe").innerText = "Mesafe: " + dist + " cm";
+                        sesCikar(dist);
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function sesCikar(dist) {
+            if (oscillator) oscillator.stop();
+            
+            oscillator = audioCtx.createOscillator();
+            let gainNode = audioCtx.createGain();
+            
+            // Mesafeyi (2-100) frekansa çevir (200Hz - 1000Hz)
+            let freq = 1000 - (dist * 8); 
+            
+            oscillator.type = 'sine'; // Daha yumuşak bir ses için 'sine'
+            oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); // Ses seviyesi
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.1); // Kısa notalar
+        }
+    </script>
+</body>
+</html>
